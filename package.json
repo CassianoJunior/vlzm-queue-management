@@ -1,0 +1,27 @@
+{
+  "name": "vlzm-queue-management",
+  "version": "1.0.0",
+  "description": "Queue management system for organizing doubles matches",
+  "main": "queue-management.ts",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "sample": "node run-sample.js"
+  },
+  "keywords": [
+    "queue",
+    "matches",
+    "doubles",
+    "sports"
+  ],
+  "author": "CassianoJunior",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  },
+  "dependencies": {
+    "tsx": "^4.20.6"
+  }
+}
