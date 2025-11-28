@@ -189,7 +189,7 @@ describe('Queue Management System', () => {
       expect(isCorrectMatch).toBe(true);
     });
 
-    it('should throw error when insufficient teams after 2 consecutive wins', () => {
+    it('should ignore 2 consecutive wins rule when queue has insufficient teams (1 team)', () => {
       const manager = new QueueManager(1);
       const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
       const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
@@ -200,8 +200,26 @@ describe('Queue Management System', () => {
       // Team1 wins first match
       manager.recordResult(1, { 15: team1, 10: team2 });
       
-      // Team1 wins second match - should throw error (only team2 in queue, need 2 teams)
-      expect(() => manager.recordResult(1, { 15: team1, 8: team3 })).toThrow(InsufficientTeamsError);
+      // Team1 wins second match - should NOT throw error, but treat as normal win
+      // Queue has only team2 (length 1). 2 consecutive wins rule ignored.
+      // Winner (team1) stays, loser (team3) goes to queue.
+      // Next match: team1 vs team2
+      manager.recordResult(1, { 15: team1, 8: team3 });
+      
+      const state = manager.getCurrentState();
+      expect(state.courts[0].consecutiveWins).toBe(2);
+      expect(areTeamsEqual(state.courts[0].currentCourtTeam!, team1)).toBe(true);
+      
+      // Check queue
+      expect(state.queue.length).toBe(1);
+      expect(areTeamsEqual(state.queue[0], team3)).toBe(true);
+      
+      // Check next match
+      const currentMatch = state.courts[0].currentMatch!;
+      const isCorrectMatch = 
+        (areTeamsEqual(currentMatch.team1, team1) && areTeamsEqual(currentMatch.team2, team2)) ||
+        (areTeamsEqual(currentMatch.team1, team2) && areTeamsEqual(currentMatch.team2, team1));
+      expect(isCorrectMatch).toBe(true);
     });
   });
 

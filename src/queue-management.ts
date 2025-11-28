@@ -148,7 +148,7 @@ export class QueueManager {
     console.log(`Court ${courtId} - Consecutive wins: ${court.consecutiveWins}`);
 
     // Apply queue management rules
-    if (court.consecutiveWins >= 2) {
+    if (court.consecutiveWins >= 2 && this.state.queue.length >= 2) {
       // Rule: After 2 consecutive wins, both teams go to the end of the queue
       // Winner goes first, then loser
       console.log(`Court ${courtId} - 2 consecutive wins reached! Both teams return to queue.`);
