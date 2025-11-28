@@ -10,7 +10,8 @@ import {
   InsufficientTeamsError,
   InvalidMatchResultError,
   NoActiveMatchError,
-  CourtNotFoundError
+  CourtNotFoundError,
+  InvalidQueueIndexError
 } from './types';
 
 describe('Queue Management System', () => {
@@ -709,6 +710,241 @@ describe('Queue Management System', () => {
       manager.recordResult(1, { 15: team1, 10: team2 });
       queueDisplay = manager.beautifyQueue();
       expect(queueDisplay).toBe('Grace e Henry\nCharlie e Diana');
+    });
+  });
+
+  describe('Reorder Team In Queue', () => {
+    it('should throw error when reordering before initialization', () => {
+      const manager = new QueueManager(1);
+      
+      expect(() => manager.reorderTeamInQueue(0, 1)).toThrow('Cannot reorder queue: System has not been initialized');
+    });
+
+    it('should throw InvalidQueueIndexError for negative fromIndex', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      const team4 = createTeam(createPlayer(7, 'Grace'), createPlayer(8, 'Henry'));
+      
+      manager.initialize([team1, team2, team3, team4]);
+      
+      expect(() => manager.reorderTeamInQueue(-1, 0)).toThrow(InvalidQueueIndexError);
+    });
+
+    it('should throw InvalidQueueIndexError for fromIndex out of bounds', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      const team4 = createTeam(createPlayer(7, 'Grace'), createPlayer(8, 'Henry'));
+      
+      manager.initialize([team1, team2, team3, team4]);
+      
+      expect(() => manager.reorderTeamInQueue(5, 0)).toThrow(InvalidQueueIndexError);
+    });
+
+    it('should throw InvalidQueueIndexError for negative toIndex', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      const team4 = createTeam(createPlayer(7, 'Grace'), createPlayer(8, 'Henry'));
+      
+      manager.initialize([team1, team2, team3, team4]);
+      
+      expect(() => manager.reorderTeamInQueue(0, -1)).toThrow(InvalidQueueIndexError);
+    });
+
+    it('should throw InvalidQueueIndexError for toIndex out of bounds', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      const team4 = createTeam(createPlayer(7, 'Grace'), createPlayer(8, 'Henry'));
+      
+      manager.initialize([team1, team2, team3, team4]);
+      
+      expect(() => manager.reorderTeamInQueue(0, 10)).toThrow(InvalidQueueIndexError);
+    });
+
+    it('should throw InvalidQueueIndexError with empty queue', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      
+      manager.initialize([team1, team2]);
+      
+      expect(() => manager.reorderTeamInQueue(0, 1)).toThrow(InvalidQueueIndexError);
+    });
+
+    it('should be a no-op when fromIndex equals toIndex', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      const team4 = createTeam(createPlayer(7, 'Grace'), createPlayer(8, 'Henry'));
+      
+      manager.initialize([team1, team2, team3, team4]);
+      
+      const stateBefore = manager.getCurrentState();
+      manager.reorderTeamInQueue(0, 0);
+      const stateAfter = manager.getCurrentState();
+      
+      expect(stateAfter.queue.length).toBe(stateBefore.queue.length);
+      expect(areTeamsEqual(stateAfter.queue[0], stateBefore.queue[0])).toBe(true);
+      expect(areTeamsEqual(stateAfter.queue[1], stateBefore.queue[1])).toBe(true);
+    });
+
+    it('should move team forward in queue (from index 1 to 0)', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      const team4 = createTeam(createPlayer(7, 'Grace'), createPlayer(8, 'Henry'));
+      
+      manager.initialize([team1, team2, team3, team4]);
+      // Queue: [team3, team4]
+      
+      manager.reorderTeamInQueue(1, 0);
+      // Queue should be: [team4, team3]
+      
+      const state = manager.getCurrentState();
+      expect(state.queue.length).toBe(2);
+      expect(areTeamsEqual(state.queue[0], team4)).toBe(true);
+      expect(areTeamsEqual(state.queue[1], team3)).toBe(true);
+    });
+
+    it('should move team backward in queue (from index 0 to 1)', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      const team4 = createTeam(createPlayer(7, 'Grace'), createPlayer(8, 'Henry'));
+      
+      manager.initialize([team1, team2, team3, team4]);
+      // Queue: [team3, team4]
+      
+      manager.reorderTeamInQueue(0, 1);
+      // Queue should be: [team4, team3]
+      
+      const state = manager.getCurrentState();
+      expect(state.queue.length).toBe(2);
+      expect(areTeamsEqual(state.queue[0], team4)).toBe(true);
+      expect(areTeamsEqual(state.queue[1], team3)).toBe(true);
+    });
+
+    it('should correctly reorder in a longer queue', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      const team4 = createTeam(createPlayer(7, 'Grace'), createPlayer(8, 'Henry'));
+      const team5 = createTeam(createPlayer(9, 'Ivy'), createPlayer(10, 'Jack'));
+      const team6 = createTeam(createPlayer(11, 'Kate'), createPlayer(12, 'Leo'));
+      
+      manager.initialize([team1, team2, team3, team4, team5, team6]);
+      // Queue: [team3, team4, team5, team6]
+      
+      // Move team6 from position 3 to position 1
+      manager.reorderTeamInQueue(3, 1);
+      // Queue should be: [team3, team6, team4, team5]
+      
+      const state = manager.getCurrentState();
+      expect(state.queue.length).toBe(4);
+      expect(areTeamsEqual(state.queue[0], team3)).toBe(true);
+      expect(areTeamsEqual(state.queue[1], team6)).toBe(true);
+      expect(areTeamsEqual(state.queue[2], team4)).toBe(true);
+      expect(areTeamsEqual(state.queue[3], team5)).toBe(true);
+    });
+
+    it('should not affect ongoing matches when reordering queue', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      const team4 = createTeam(createPlayer(7, 'Grace'), createPlayer(8, 'Henry'));
+      
+      manager.initialize([team1, team2, team3, team4]);
+      
+      const matchBefore = manager.getCourtMatch(1);
+      manager.reorderTeamInQueue(0, 1);
+      const matchAfter = manager.getCourtMatch(1);
+      
+      expect(matchAfter).toEqual(matchBefore);
+    });
+
+    it('should work correctly with single team in queue', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      
+      manager.initialize([team1, team2, team3]);
+      // Queue: [team3]
+      
+      // Only valid call is reorderTeamInQueue(0, 0) which is a no-op
+      manager.reorderTeamInQueue(0, 0);
+      
+      const state = manager.getCurrentState();
+      expect(state.queue.length).toBe(1);
+      expect(areTeamsEqual(state.queue[0], team3)).toBe(true);
+    });
+
+    it('should allow reordered team to participate correctly in next match', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      const team4 = createTeam(createPlayer(7, 'Grace'), createPlayer(8, 'Henry'));
+      
+      manager.initialize([team1, team2, team3, team4]);
+      // Queue: [team3, team4]
+      
+      // Move team4 to front
+      manager.reorderTeamInQueue(1, 0);
+      // Queue: [team4, team3]
+      
+      // Team1 wins, team2 goes to queue, team4 (now first in queue) plays next
+      manager.recordResult(1, { 15: team1, 10: team2 });
+      
+      const state = manager.getCurrentState();
+      const currentMatch = state.courts[0].currentMatch!;
+      
+      // Next match should be team1 vs team4 (since team4 is now first in queue)
+      const isCorrectMatch = 
+        (areTeamsEqual(currentMatch.team1, team1) && areTeamsEqual(currentMatch.team2, team4)) ||
+        (areTeamsEqual(currentMatch.team1, team4) && areTeamsEqual(currentMatch.team2, team1));
+      expect(isCorrectMatch).toBe(true);
+      
+      // Queue should now be [team3, team2]
+      expect(state.queue.length).toBe(2);
+      expect(areTeamsEqual(state.queue[0], team3)).toBe(true);
+      expect(areTeamsEqual(state.queue[1], team2)).toBe(true);
+    });
+
+    it('should persist reordered queue through save/load state', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      const team4 = createTeam(createPlayer(7, 'Grace'), createPlayer(8, 'Henry'));
+      
+      manager.initialize([team1, team2, team3, team4]);
+      // Queue: [team3, team4]
+      
+      manager.reorderTeamInQueue(1, 0);
+      // Queue: [team4, team3]
+      
+      const savedState = manager.saveState();
+      
+      const newManager = new QueueManager(1);
+      newManager.loadState(savedState);
+      
+      const state = newManager.getCurrentState();
+      expect(state.queue.length).toBe(2);
+      expect(areTeamsEqual(state.queue[0], team4)).toBe(true);
+      expect(areTeamsEqual(state.queue[1], team3)).toBe(true);
     });
   });
 });

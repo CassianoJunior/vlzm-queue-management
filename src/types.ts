@@ -123,3 +123,13 @@ export class CourtNotFoundError extends QueueManagementError {
     this.name = 'CourtNotFoundError';
   }
 }
+
+/**
+ * Error thrown when queue index is invalid
+ */
+export class InvalidQueueIndexError extends QueueManagementError {
+  constructor(index: number, queueLength: number) {
+    super(`Invalid queue index: ${index}. Queue length is ${queueLength}. Valid indices are 0 to ${queueLength - 1}.`);
+    this.name = 'InvalidQueueIndexError';
+  }
+}

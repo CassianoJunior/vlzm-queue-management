@@ -221,6 +221,31 @@ Get the winner of the session based on:
 Get a formatted string representation of the current queue.
 - **Returns**: A string with each team in the queue on a separate line (format: "Player1 e Player2"), or "Queue is empty" if queue is empty
 
+#### `reorderTeamInQueue(fromIndex: number, toIndex: number): void`
+Reorder a team within the queue by moving it from one position to another. This allows adjusting the queue order while matches are in progress.
+- **Parameters**:
+  - `fromIndex`: The current index of the team to move (0-based)
+  - `toIndex`: The target index to move the team to (0-based)
+- **Behavior**:
+  - If `fromIndex === toIndex`, the method returns immediately (no-op)
+  - The team is removed from `fromIndex` and inserted at `toIndex`
+  - Does not affect ongoing matches on any court
+- **Throws**: 
+  - `Error` if the system has not been initialized (call `initialize()` first)
+  - `InvalidQueueIndexError` if either index is out of bounds (negative or >= queue length)
+
+```typescript
+// Example: Moving a team to the front of the queue
+const state = manager.getCurrentState();
+// Queue: [team3, team4, team5, team6]
+
+manager.reorderTeamInQueue(3, 0); // Move team6 from position 3 to position 0
+// Queue: [team6, team3, team4, team5]
+
+manager.reorderTeamInQueue(1, 2); // Move team3 from position 1 to position 2
+// Queue: [team6, team4, team3, team5]
+```
+
 #### `saveState(): string`
 Save the current state to a JSON string for persistence.
 

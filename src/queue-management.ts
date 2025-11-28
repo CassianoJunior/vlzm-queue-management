@@ -9,7 +9,8 @@ import {
   InsufficientTeamsError,
   InvalidMatchResultError,
   NoActiveMatchError,
-  CourtNotFoundError
+  CourtNotFoundError,
+  InvalidQueueIndexError
 } from './types';
 
 /**
@@ -385,6 +386,44 @@ export class QueueManager {
     return this.state.queue
       .map(team => `${team.player1.name} e ${team.player2.name}`)
       .join('\n');
+  }
+
+  /**
+   * Reorder a team within the queue by moving it from one position to another
+   * @param fromIndex - The current index of the team to move (0-based)
+   * @param toIndex - The target index to move the team to (0-based)
+   * @throws {Error} if the system has not been initialized
+   * @throws {InvalidQueueIndexError} if either index is out of bounds
+   */
+  reorderTeamInQueue(fromIndex: number, toIndex: number): void {
+    // Check if system is initialized (at least one court has an active match)
+    const hasActiveMatch = this.state.courts.some(court => court.currentMatch !== null);
+    if (!hasActiveMatch) {
+      throw new Error('Cannot reorder queue: System has not been initialized. Call initialize() first.');
+    }
+
+    const queueLength = this.state.queue.length;
+
+    // Validate fromIndex
+    if (fromIndex < 0 || fromIndex >= queueLength) {
+      throw new InvalidQueueIndexError(fromIndex, queueLength);
+    }
+
+    // Validate toIndex
+    if (toIndex < 0 || toIndex >= queueLength) {
+      throw new InvalidQueueIndexError(toIndex, queueLength);
+    }
+
+    // No-op if indices are the same
+    if (fromIndex === toIndex) {
+      return;
+    }
+
+    // Remove team from current position and insert at new position
+    const [team] = this.state.queue.splice(fromIndex, 1);
+    this.state.queue.splice(toIndex, 0, team);
+
+    console.log(`Moved team [${team.player1.name}, ${team.player2.name}] from position ${fromIndex} to ${toIndex}`);
   }
 
   /**
