@@ -32,6 +32,8 @@ A TypeScript system for managing match organization between doubles teams across
 - **Next Match**: First two teams from queue
 - **Consecutive Counter**: Resets to 0 for that court
 
+**Exception / Bypass:** If the shared queue contains only one team at the moment a court reaches 2 consecutive wins, the "2 Consecutive Wins" rule is bypassed to avoid blocking play. In that case the winner stays on court and the loser goes to the end of the queue (i.e., the situation is treated like a single win). This prevents requiring two teams in the queue to continue.
+
 ### Multiple Courts
 - All courts share the same queue
 - Each court tracks its own consecutive wins independently
@@ -169,7 +171,7 @@ Record the result of a match on a specific court and update the queue.
   - `CourtNotFoundError` if court doesn't exist
   - `NoActiveMatchError` if no match is in progress on that court
   - `InvalidMatchResultError` if teams in scoreMap don't match current match or if not exactly 2 teams provided
-  - `InsufficientTeamsError` if queue doesn't have enough teams after 2 consecutive wins
+  - `InsufficientTeamsError` if the shared queue doesn't have enough teams to replace both teams after 2 consecutive wins (i.e., fewer than 2 teams). Note: when the queue has only one team, the two-consecutive-wins rule is bypassed and `InsufficientTeamsError` is not thrown.
 
 #### `getCurrentState(): SystemState`
 Get the current state of the system including all courts, queue, and match history.
