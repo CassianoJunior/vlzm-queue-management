@@ -491,6 +491,182 @@ describe('Queue Management System', () => {
     });
   });
 
+  describe('Add Teams Mid-Queue', () => {
+    it('should throw error when adding teams before initialization', () => {
+      const manager = new QueueManager(1);
+      const newTeam = createTeam(createPlayer(9, 'Ivy'), createPlayer(10, 'Jack'));
+      
+      expect(() => manager.addTeams([newTeam])).toThrow('Cannot add teams: System has not been initialized');
+    });
+
+    it('should add a single team to end of queue', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      
+      manager.initialize([team1, team2, team3]);
+      
+      const newTeam = createTeam(createPlayer(9, 'Ivy'), createPlayer(10, 'Jack'));
+      manager.addTeams([newTeam]);
+      
+      const state = manager.getCurrentState();
+      expect(state.queue.length).toBe(2);
+      expect(areTeamsEqual(state.queue[0], team3)).toBe(true);
+      expect(areTeamsEqual(state.queue[1], newTeam)).toBe(true);
+    });
+
+    it('should add multiple teams to end of queue in order', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      
+      manager.initialize([team1, team2]);
+      
+      const newTeam1 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      const newTeam2 = createTeam(createPlayer(7, 'Grace'), createPlayer(8, 'Henry'));
+      const newTeam3 = createTeam(createPlayer(9, 'Ivy'), createPlayer(10, 'Jack'));
+      
+      manager.addTeams([newTeam1, newTeam2, newTeam3]);
+      
+      const state = manager.getCurrentState();
+      expect(state.queue.length).toBe(3);
+      expect(areTeamsEqual(state.queue[0], newTeam1)).toBe(true);
+      expect(areTeamsEqual(state.queue[1], newTeam2)).toBe(true);
+      expect(areTeamsEqual(state.queue[2], newTeam3)).toBe(true);
+    });
+
+    it('should silently ignore duplicate teams already in queue', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      
+      manager.initialize([team1, team2, team3]);
+      
+      // Try to add team3 again (already in queue)
+      const duplicateTeam = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      const newTeam = createTeam(createPlayer(7, 'Grace'), createPlayer(8, 'Henry'));
+      
+      manager.addTeams([duplicateTeam, newTeam]);
+      
+      const state = manager.getCurrentState();
+      expect(state.queue.length).toBe(2); // team3 + newTeam, duplicate ignored
+      expect(areTeamsEqual(state.queue[0], team3)).toBe(true);
+      expect(areTeamsEqual(state.queue[1], newTeam)).toBe(true);
+    });
+
+    it('should silently ignore duplicate teams currently on court', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      
+      manager.initialize([team1, team2]);
+      
+      // Try to add team1 (currently playing on court)
+      const duplicateTeam = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const newTeam = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      
+      manager.addTeams([duplicateTeam, newTeam]);
+      
+      const state = manager.getCurrentState();
+      expect(state.queue.length).toBe(1); // only newTeam added
+      expect(areTeamsEqual(state.queue[0], newTeam)).toBe(true);
+    });
+
+    it('should detect duplicates regardless of player order in team', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      
+      manager.initialize([team1, team2]);
+      
+      // Try to add team1 with reversed player order
+      const duplicateTeam = createTeam(createPlayer(2, 'Bob'), createPlayer(1, 'Alice'));
+      const newTeam = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      
+      manager.addTeams([duplicateTeam, newTeam]);
+      
+      const state = manager.getCurrentState();
+      expect(state.queue.length).toBe(1); // only newTeam added
+      expect(areTeamsEqual(state.queue[0], newTeam)).toBe(true);
+    });
+
+    it('should not affect ongoing matches when adding teams', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      
+      manager.initialize([team1, team2]);
+      
+      const matchBefore = manager.getCourtMatch(1);
+      
+      const newTeam = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      manager.addTeams([newTeam]);
+      
+      const matchAfter = manager.getCourtMatch(1);
+      
+      expect(matchAfter).toEqual(matchBefore);
+    });
+
+    it('should handle adding empty array of teams', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      
+      manager.initialize([team1, team2]);
+      
+      const queueLengthBefore = manager.getCurrentState().queue.length;
+      
+      manager.addTeams([]);
+      
+      const queueLengthAfter = manager.getCurrentState().queue.length;
+      expect(queueLengthAfter).toBe(queueLengthBefore);
+    });
+
+    it('should work correctly with multiple courts', () => {
+      const manager = new QueueManager(2);
+      const teams = [
+        createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob')),
+        createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana')),
+        createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank')),
+        createTeam(createPlayer(7, 'Grace'), createPlayer(8, 'Henry'))
+      ];
+      
+      manager.initialize(teams);
+      
+      const newTeam = createTeam(createPlayer(9, 'Ivy'), createPlayer(10, 'Jack'));
+      manager.addTeams([newTeam]);
+      
+      const state = manager.getCurrentState();
+      expect(state.queue.length).toBe(1);
+      expect(areTeamsEqual(state.queue[0], newTeam)).toBe(true);
+    });
+
+    it('should allow added teams to participate in rotation', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      
+      manager.initialize([team1, team2]);
+      
+      const newTeam = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      manager.addTeams([newTeam]);
+      
+      // Team1 wins, team2 goes to queue, newTeam plays next
+      manager.recordResult(1, { 15: team1, 10: team2 });
+      
+      const state = manager.getCurrentState();
+      const currentMatch = state.courts[0].currentMatch!;
+      
+      // Next match should be team1 vs newTeam
+      const isCorrectMatch = 
+        (areTeamsEqual(currentMatch.team1, team1) && areTeamsEqual(currentMatch.team2, newTeam)) ||
+        (areTeamsEqual(currentMatch.team1, newTeam) && areTeamsEqual(currentMatch.team2, team1));
+      expect(isCorrectMatch).toBe(true);
+    });
+  });
+
   describe('Queue Display', () => {
     it('should return "Queue is empty" when queue is empty', () => {
       const manager = new QueueManager(1);

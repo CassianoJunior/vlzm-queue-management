@@ -75,6 +75,55 @@ export class QueueManager {
   }
 
   /**
+   * Add teams to the queue after the system has been initialized
+   * New teams are added to the end of the queue
+   * Duplicate teams (already in queue or playing on court) are silently ignored
+   * @param teams - Array of teams to add to the queue
+   * @throws {Error} if the system has not been initialized
+   */
+  addTeams(teams: Team[]): void {
+    // Check if system is initialized (at least one court has an active match)
+    const hasActiveMatch = this.state.courts.some(court => court.currentMatch !== null);
+    if (!hasActiveMatch) {
+      throw new Error('Cannot add teams: System has not been initialized. Call initialize() first.');
+    }
+
+    // Get all existing team IDs (from queue and courts)
+    const existingTeamIds = new Set<string>();
+
+    // Add teams from queue
+    for (const team of this.state.queue) {
+      existingTeamIds.add(this.getTeamKey(team));
+    }
+
+    // Add teams from courts
+    for (const court of this.state.courts) {
+      if (court.currentMatch) {
+        existingTeamIds.add(this.getTeamKey(court.currentMatch.team1));
+        existingTeamIds.add(this.getTeamKey(court.currentMatch.team2));
+      }
+    }
+
+    // Filter out duplicates and add new teams
+    const newTeams = teams.filter(team => {
+      const teamKey = this.getTeamKey(team);
+      return !existingTeamIds.has(teamKey);
+    });
+
+    // Add new teams to end of queue
+    this.state.queue.push(...newTeams);
+
+    if (newTeams.length > 0) {
+      console.log(`Added ${newTeams.length} team(s) to the queue`);
+      console.log(`Queue size: ${this.state.queue.length}`);
+    }
+
+    if (newTeams.length < teams.length) {
+      console.log(`${teams.length - newTeams.length} duplicate team(s) were ignored`);
+    }
+  }
+
+  /**
    * Record the result of a match on a specific court and update the queue
    * @param courtId - The ID of the court where the match was played
    * @param scoreMap - Object mapping scores to teams (e.g., { 15: team1, 13: team2 })

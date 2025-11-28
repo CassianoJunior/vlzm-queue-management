@@ -162,6 +162,27 @@ Create a new queue manager with specified number of courts.
 Initialize the system with an ordered list of teams.
 - **Throws**: `InsufficientTeamsError` if less than `2 * numberOfCourts` teams provided
 
+#### `addTeams(teams: Team[]): void`
+Add teams to the queue after the system has been initialized.
+- **Parameters**: `teams` - Array of teams to add to the queue
+- **Behavior**:
+  - New teams are added to the **end** of the queue
+  - Duplicate teams (already in queue or currently playing on court) are **silently ignored**
+  - Teams are compared by player IDs (order-independent)
+- **Throws**: `Error` if the system has not been initialized (call `initialize()` first)
+
+```typescript
+// Example: Adding late arrivals to an ongoing session
+const lateTeam1 = createTeam(createPlayer(17, 'Mike'), createPlayer(18, 'Nina'));
+const lateTeam2 = createTeam(createPlayer(19, 'Oscar'), createPlayer(20, 'Paula'));
+
+manager.addTeams([lateTeam1, lateTeam2]);
+// Both teams are now at the end of the queue
+
+// Trying to add a team that's already playing - silently ignored
+manager.addTeams([team1]); // No effect if team1 is already on court or in queue
+```
+
 #### `recordResult(courtId: number, scoreMap: Record<number, Team>): void`
 Record the result of a match on a specific court and update the queue.
 - **Parameters**:
