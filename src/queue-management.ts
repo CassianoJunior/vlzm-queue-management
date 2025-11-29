@@ -13,6 +13,9 @@ import {
   InvalidQueueIndexError
 } from './types';
 
+// Re-export types for convenience
+export type { Player, Team, Match, MatchResult, SystemState, Court, TeamStatistics };
+
 /**
  * Queue Manager for organizing doubles matches across multiple courts
  */
@@ -279,6 +282,38 @@ export class QueueManager {
   getCourtMatch(courtId: number): Match | null {
     const court = this.state.courts.find(c => c.id === courtId);
     return court?.currentMatch || null;
+  }
+
+  /**
+   * Update the score for a team in an active match
+   * @param courtId - The ID of the court
+   * @param teamIndex - Which team (1 or 2)
+   * @param delta - The amount to change the score by (positive or negative)
+   * @throws {CourtNotFoundError} if court doesn't exist
+   * @throws {NoActiveMatchError} if no match is in progress on that court
+   */
+  updateScore(courtId: number, teamIndex: 1 | 2, delta: number): void {
+    const court = this.state.courts.find(c => c.id === courtId);
+    
+    if (!court) {
+      throw new CourtNotFoundError(`Court ${courtId} does not exist`);
+    }
+
+    if (!court.currentMatch) {
+      throw new NoActiveMatchError(`No active match on court ${courtId}`);
+    }
+
+    // Initialize scores if not present
+    if (!court.currentMatch.currentScores) {
+      court.currentMatch.currentScores = { team1: 0, team2: 0 };
+    }
+
+    // Update the appropriate team's score
+    if (teamIndex === 1) {
+      court.currentMatch.currentScores.team1 = Math.max(0, court.currentMatch.currentScores.team1 + delta);
+    } else {
+      court.currentMatch.currentScores.team2 = Math.max(0, court.currentMatch.currentScores.team2 + delta);
+    }
   }
 
   /**

@@ -30,6 +30,10 @@ export interface Match {
   team2: Team;
   matchNumber: number;
   courtId?: number;
+  currentScores?: {
+    team1: number;
+    team2: number;
+  };
 }
 
 /**

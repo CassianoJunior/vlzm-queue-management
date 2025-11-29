@@ -200,6 +200,34 @@ Get the current state of the system including all courts, queue, and match histo
 #### `getCourtMatch(courtId: number): Match | null`
 Get the current match on a specific court.
 
+#### `updateScore(courtId: number, teamIndex: 1 | 2, delta: number): void`
+Update the score for a team in an active match. This is useful for tracking live scores during a match.
+- **Parameters**:
+  - `courtId`: The ID of the court
+  - `teamIndex`: Which team to update (1 or 2)
+  - `delta`: The amount to change the score by (positive or negative)
+- **Behavior**:
+  - Scores are initialized to 0 when first updated
+  - Scores cannot go below 0 (clamped at 0)
+  - Scores are reset when a new match starts (after `recordResult`)
+- **Throws**: 
+  - `CourtNotFoundError` if court doesn't exist
+  - `NoActiveMatchError` if no match is in progress on that court
+
+```typescript
+// Example: Tracking live scores during a match
+manager.updateScore(1, 1, 1);  // Team 1 scores a point
+manager.updateScore(1, 2, 1);  // Team 2 scores a point
+manager.updateScore(1, 1, 1);  // Team 1 scores again
+
+const match = manager.getCourtMatch(1);
+console.log(match?.currentScores); // { team1: 2, team2: 1 }
+
+// Correct a scoring error
+manager.updateScore(1, 1, -1); // Remove 1 point from team 1
+console.log(match?.currentScores); // { team1: 1, team2: 1 }
+```
+
 #### `getCourts(): Court[]`
 Get all courts with their current state.
 

@@ -947,4 +947,178 @@ describe('Queue Management System', () => {
       expect(areTeamsEqual(state.queue[1], team3)).toBe(true);
     });
   });
+
+  describe('Update Score', () => {
+    it('should throw CourtNotFoundError for invalid court id', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      
+      manager.initialize([team1, team2]);
+      
+      expect(() => manager.updateScore(999, 1, 1)).toThrow(CourtNotFoundError);
+    });
+
+    it('should throw NoActiveMatchError when no match is in progress', () => {
+      const manager = new QueueManager(1);
+      
+      expect(() => manager.updateScore(1, 1, 1)).toThrow(NoActiveMatchError);
+    });
+
+    it('should initialize scores to 0 when updating for the first time', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      
+      manager.initialize([team1, team2]);
+      
+      manager.updateScore(1, 1, 5);
+      
+      const match = manager.getCourtMatch(1);
+      expect(match?.currentScores).toEqual({ team1: 5, team2: 0 });
+    });
+
+    it('should update team1 score correctly', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      
+      manager.initialize([team1, team2]);
+      
+      manager.updateScore(1, 1, 3);
+      manager.updateScore(1, 1, 2);
+      
+      const match = manager.getCourtMatch(1);
+      expect(match?.currentScores?.team1).toBe(5);
+    });
+
+    it('should update team2 score correctly', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      
+      manager.initialize([team1, team2]);
+      
+      manager.updateScore(1, 2, 7);
+      
+      const match = manager.getCourtMatch(1);
+      expect(match?.currentScores?.team2).toBe(7);
+    });
+
+    it('should handle negative delta to decrease score', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      
+      manager.initialize([team1, team2]);
+      
+      manager.updateScore(1, 1, 10);
+      manager.updateScore(1, 1, -3);
+      
+      const match = manager.getCourtMatch(1);
+      expect(match?.currentScores?.team1).toBe(7);
+    });
+
+    it('should not allow score to go below 0', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      
+      manager.initialize([team1, team2]);
+      
+      manager.updateScore(1, 1, 5);
+      manager.updateScore(1, 1, -10);
+      
+      const match = manager.getCourtMatch(1);
+      expect(match?.currentScores?.team1).toBe(0);
+    });
+
+    it('should update scores independently for each team', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      
+      manager.initialize([team1, team2]);
+      
+      manager.updateScore(1, 1, 15);
+      manager.updateScore(1, 2, 12);
+      
+      const match = manager.getCourtMatch(1);
+      expect(match?.currentScores).toEqual({ team1: 15, team2: 12 });
+    });
+
+    it('should work correctly with multiple courts', () => {
+      const manager = new QueueManager(2);
+      const teams = [
+        createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob')),
+        createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana')),
+        createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank')),
+        createTeam(createPlayer(7, 'Grace'), createPlayer(8, 'Henry'))
+      ];
+      
+      manager.initialize(teams);
+      
+      manager.updateScore(1, 1, 10);
+      manager.updateScore(2, 2, 8);
+      
+      const match1 = manager.getCourtMatch(1);
+      const match2 = manager.getCourtMatch(2);
+      
+      expect(match1?.currentScores).toEqual({ team1: 10, team2: 0 });
+      expect(match2?.currentScores).toEqual({ team1: 0, team2: 8 });
+    });
+
+    it('should reset scores when a new match starts after recording result', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      
+      manager.initialize([team1, team2, team3]);
+      
+      // Update scores during current match
+      manager.updateScore(1, 1, 15);
+      manager.updateScore(1, 2, 10);
+      
+      // Record result
+      manager.recordResult(1, { 15: team1, 10: team2 });
+      
+      // New match should not have the old scores
+      const newMatch = manager.getCourtMatch(1);
+      expect(newMatch?.currentScores).toBeUndefined();
+    });
+
+    it('should handle zero delta correctly', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      
+      manager.initialize([team1, team2]);
+      
+      manager.updateScore(1, 1, 5);
+      manager.updateScore(1, 1, 0);
+      
+      const match = manager.getCourtMatch(1);
+      expect(match?.currentScores?.team1).toBe(5);
+    });
+
+    it('should persist scores through save/load state', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      
+      manager.initialize([team1, team2]);
+      
+      manager.updateScore(1, 1, 12);
+      manager.updateScore(1, 2, 9);
+      
+      const savedState = manager.saveState();
+      
+      const newManager = new QueueManager(1);
+      newManager.loadState(savedState);
+      
+      const match = newManager.getCourtMatch(1);
+      expect(match?.currentScores).toEqual({ team1: 12, team2: 9 });
+    });
+  });
 });
