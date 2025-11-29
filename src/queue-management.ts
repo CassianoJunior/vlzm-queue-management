@@ -22,8 +22,11 @@ export type { Player, Team, Match, MatchResult, SystemState, Court, TeamStatisti
 export class QueueManager {
   private state: SystemState;
   private matchCounter: number = 0;
+  private undoStack: string[] = [];
+  private redoStack: string[] = [];
+  private maxHistorySize: number;
 
-  constructor(numberOfCourts: number = 1) {
+  constructor(numberOfCourts: number = 1, maxHistorySize: number = 20) {
     if (numberOfCourts < 1) {
       throw new Error('Number of courts must be at least 1');
     }
@@ -38,6 +41,7 @@ export class QueueManager {
       queue: [],
       matchHistory: []
     };
+    this.maxHistorySize = maxHistorySize;
   }
 
   /**
@@ -74,6 +78,10 @@ export class QueueManager {
     this.state.queue = teams.slice(teamIndex);
     this.state.matchHistory = [];
 
+    // Clear undo/redo history on initialize
+    this.undoStack = [];
+    this.redoStack = [];
+
     console.log(`System initialized with ${teams.length} teams across ${this.state.courts.length} court(s)`);
     console.log(`Queue size: ${this.state.queue.length}`);
   }
@@ -88,6 +96,9 @@ export class QueueManager {
   addTeams(teams: Team[]): void {
     // Check if system is initialized (at least one court has an active match)
     const hasActiveMatch = this.state.courts.some(court => court.currentMatch !== null);
+    if (hasActiveMatch) {
+      this.saveSnapshot();
+    }
     if (!hasActiveMatch) {
       throw new Error('Cannot add teams: System has not been initialized. Call initialize() first.');
     }
@@ -137,6 +148,7 @@ export class QueueManager {
    * @throws {InsufficientTeamsError} if queue doesn't have enough teams after 2 consecutive wins
    */
   recordResult(courtId: number, scoreMap: Record<number, Team>): void {
+    this.saveSnapshot();
     const court = this.state.courts.find(c => c.id === courtId);
     
     if (!court) {
@@ -433,6 +445,9 @@ export class QueueManager {
   reorderTeamInQueue(fromIndex: number, toIndex: number): void {
     // Check if system is initialized (at least one court has an active match)
     const hasActiveMatch = this.state.courts.some(court => court.currentMatch !== null);
+    if (hasActiveMatch) {
+      this.saveSnapshot();
+    }
     if (!hasActiveMatch) {
       throw new Error('Cannot reorder queue: System has not been initialized. Call initialize() first.');
     }
@@ -470,6 +485,146 @@ export class QueueManager {
   }
 
   /**
+   * Create a snapshot of the current state for undo/redo (excludes currentScores)
+   */
+  private createSnapshotData(): string {
+    const snapshotState = {
+      courts: this.state.courts.map(court => ({
+        id: court.id,
+        currentMatch: court.currentMatch ? {
+          team1: court.currentMatch.team1,
+          team2: court.currentMatch.team2,
+          matchNumber: court.currentMatch.matchNumber,
+          courtId: court.currentMatch.courtId
+          // Exclude currentScores
+        } : null,
+        consecutiveWins: court.consecutiveWins,
+        currentCourtTeam: court.currentCourtTeam
+      })),
+      queue: this.state.queue,
+      matchHistory: this.state.matchHistory
+    };
+    return JSON.stringify({
+      state: snapshotState,
+      matchCounter: this.matchCounter
+    });
+  }
+
+  /**
+   * Save current state to undo stack (clears redo stack)
+   */
+  private saveSnapshot(): void {
+    const snapshot = this.createSnapshotData();
+    this.undoStack.push(snapshot);
+    
+    // Trim undo stack if it exceeds max size
+    if (this.undoStack.length > this.maxHistorySize) {
+      this.undoStack.shift();
+    }
+    
+    // Clear redo stack on new action
+    this.redoStack = [];
+  }
+
+  /**
+   * Restore state from a snapshot (does not modify undo/redo stacks)
+   */
+  private restoreSnapshot(snapshot: string): void {
+    const saveData = JSON.parse(snapshot);
+    
+    // Restore dates in match history
+    if (saveData.state.matchHistory) {
+      saveData.state.matchHistory = saveData.state.matchHistory.map((result: any) => ({
+        ...result,
+        timestamp: new Date(result.timestamp)
+      }));
+    }
+
+    this.state = saveData.state;
+    this.matchCounter = saveData.matchCounter;
+  }
+
+  /**
+   * Undo the last state-changing operation
+   * @returns true if undo was successful, false if there's nothing to undo
+   */
+  undo(): boolean {
+    if (this.undoStack.length === 0) {
+      return false;
+    }
+
+    // Save current state to redo stack
+    const currentSnapshot = this.createSnapshotData();
+    this.redoStack.push(currentSnapshot);
+    
+    // Trim redo stack if it exceeds max size
+    if (this.redoStack.length > this.maxHistorySize) {
+      this.redoStack.shift();
+    }
+
+    // Restore previous state
+    const previousSnapshot = this.undoStack.pop()!;
+    this.restoreSnapshot(previousSnapshot);
+    
+    console.log('Undo successful');
+    return true;
+  }
+
+  /**
+   * Redo a previously undone operation
+   * @returns true if redo was successful, false if there's nothing to redo
+   */
+  redo(): boolean {
+    if (this.redoStack.length === 0) {
+      return false;
+    }
+
+    // Save current state to undo stack
+    const currentSnapshot = this.createSnapshotData();
+    this.undoStack.push(currentSnapshot);
+    
+    // Trim undo stack if it exceeds max size
+    if (this.undoStack.length > this.maxHistorySize) {
+      this.undoStack.shift();
+    }
+
+    // Restore next state
+    const nextSnapshot = this.redoStack.pop()!;
+    this.restoreSnapshot(nextSnapshot);
+    
+    console.log('Redo successful');
+    return true;
+  }
+
+  /**
+   * Check if undo is available
+   */
+  canUndo(): boolean {
+    return this.undoStack.length > 0;
+  }
+
+  /**
+   * Check if redo is available
+   */
+  canRedo(): boolean {
+    return this.redoStack.length > 0;
+  }
+
+  /**
+   * Get the number of undo steps available
+   */
+  getUndoDepth(): number {
+    return this.undoStack.length;
+  }
+
+  /**
+   * Get the number of redo steps available
+   */
+  getRedoDepth(): number {
+    return this.redoStack.length;
+  }
+
+  /**
    * Save the current state to a serializable object
    * @returns A serializable representation of the current state
    */
@@ -504,6 +659,10 @@ export class QueueManager {
 
       this.state = saveData.state;
       this.matchCounter = saveData.matchCounter;
+
+      // Clear undo/redo history on loadState
+      this.undoStack = [];
+      this.redoStack = [];
 
       console.log('State loaded successfully');
       if (this.state.courts.length > 0 && this.state.courts[0].currentMatch) {

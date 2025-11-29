@@ -278,8 +278,95 @@ manager.reorderTeamInQueue(1, 2); // Move team3 from position 1 to position 2
 Save the current state to a JSON string for persistence.
 
 #### `loadState(savedState: string): void`
+
 Load a previously saved state.
+
 - **Throws**: `Error` if the saved state is invalid
+
+### Undo/Redo
+
+The queue manager supports undo and redo operations for reverting or reapplying state-changing actions. This is useful for correcting mistakes during match management.
+
+#### `constructor(numberOfCourts: number = 1, maxHistorySize: number = 20)`
+
+Create a new queue manager with specified number of courts and history size.
+
+- **Parameters**:
+  - `numberOfCourts`: Number of courts (default: 1)
+  - `maxHistorySize`: Maximum number of undo/redo steps to keep (default: 20). Each stack (undo and redo) is independently capped at this limit.
+
+#### `undo(): boolean`
+
+Undo the last state-changing operation.
+
+- **Returns**: `true` if undo was successful, `false` if there's nothing to undo
+- **Tracked Operations**: `recordResult`, `addTeams`, `reorderTeamInQueue`
+- **Not Tracked**: `updateScore` (live score changes are not tracked for undo)
+
+#### `redo(): boolean`
+
+Redo a previously undone operation.
+
+- **Returns**: `true` if redo was successful, `false` if there's nothing to redo
+- **Note**: Redo history is cleared when a new action is performed after undo
+
+#### `canUndo(): boolean`
+
+Check if undo is available.
+
+#### `canRedo(): boolean`
+
+Check if redo is available.
+
+#### `getUndoDepth(): number`
+
+Get the number of undo steps available.
+
+#### `getRedoDepth(): number`
+
+Get the number of redo steps available.
+
+```typescript
+// Example: Using undo/redo
+
+const manager = new QueueManager(1, 10); // 1 court, max 10 undo/redo steps
+manager.initialize([team1, team2, team3, team4]);
+
+// Record a match result
+manager.recordResult(1, { 15: team1, 10: team2 });
+console.log(manager.canUndo()); // true
+
+// Oops, wrong result! Undo it
+manager.undo();
+console.log(manager.getCurrentState().matchHistory.length); // 0
+
+// Actually it was correct, redo it
+manager.redo();
+console.log(manager.getCurrentState().matchHistory.length); // 1
+
+// Multiple operations
+manager.addTeams([newTeam]);
+manager.reorderTeamInQueue(1, 0);
+
+console.log(manager.getUndoDepth()); // 3 (recordResult + addTeams + reorderTeamInQueue)
+
+// Undo multiple steps
+manager.undo(); // undo reorder
+manager.undo(); // undo addTeams
+manager.undo(); // undo recordResult
+
+console.log(manager.getRedoDepth()); // 3
+
+// New action clears redo history
+manager.recordResult(1, { 12: team1, 10: team2 });
+console.log(manager.canRedo()); // false - redo history was cleared
+```
+
+**Important Notes:**
+
+- `initialize()` and `loadState()` clear both undo and redo history
+- `updateScore()` is not tracked for undo (live scores are ephemeral)
+- Snapshots exclude `currentScores` to keep history focused on concluded matches and queue state
 
 ### Utility Functions
 
