@@ -1340,7 +1340,7 @@ describe('Queue Management System', () => {
       expect(manager.canRedo()).toBe(false);
     });
 
-    it('should clear undo/redo history on loadState', () => {
+    it('should preserve undo/redo history when loading state that includes it', () => {
       const manager = new QueueManager(1);
       const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
       const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
@@ -1348,18 +1348,86 @@ describe('Queue Management System', () => {
       
       manager.initialize([team1, team2, team3]);
       
-      const savedState = manager.saveState();
-      
+      // Perform some actions to build undo history
       manager.recordResult(1, { 15: team1, 10: team2 });
       manager.undo();
       
+      expect(manager.canUndo()).toBe(false);
       expect(manager.canRedo()).toBe(true);
+      expect(manager.getRedoDepth()).toBe(1);
       
-      // Load state clears history
-      manager.loadState(savedState);
+      // Save state (now includes undo/redo stacks)
+      const savedState = manager.saveState();
       
+      // Load into new manager
+      const newManager = new QueueManager(1);
+      newManager.loadState(savedState);
+      
+      // Undo/redo history should be preserved
+      expect(newManager.canUndo()).toBe(false);
+      expect(newManager.canRedo()).toBe(true);
+      expect(newManager.getRedoDepth()).toBe(1);
+      
+      // Should be able to redo the action
+      expect(newManager.redo()).toBe(true);
+      expect(newManager.getCurrentState().matchHistory.length).toBe(1);
+    });
+
+    it('should handle loading old state format without undo/redo stacks', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      
+      // Simulate old state format (no undoStack/redoStack)
+      const oldFormatState = JSON.stringify({
+        state: {
+          courts: [{
+            id: 1,
+            currentMatch: { team1, team2, matchNumber: 1, courtId: 1 },
+            consecutiveWins: 0,
+            currentCourtTeam: null
+          }],
+          queue: [],
+          matchHistory: []
+        },
+        matchCounter: 1
+      });
+      
+      manager.loadState(oldFormatState);
+      
+      // Should have empty undo/redo stacks
       expect(manager.canUndo()).toBe(false);
       expect(manager.canRedo()).toBe(false);
+      expect(manager.getUndoDepth()).toBe(0);
+      expect(manager.getRedoDepth()).toBe(0);
+    });
+
+    it('should persist undo stack through save/load cycle', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      
+      manager.initialize([team1, team2, team3]);
+      
+      // Build undo history
+      manager.recordResult(1, { 15: team1, 10: team2 });
+      
+      expect(manager.getUndoDepth()).toBe(1);
+      expect(manager.canUndo()).toBe(true);
+      
+      // Save and load
+      const savedState = manager.saveState();
+      const newManager = new QueueManager(1);
+      newManager.loadState(savedState);
+      
+      // Undo stack should be preserved
+      expect(newManager.getUndoDepth()).toBe(1);
+      expect(newManager.canUndo()).toBe(true);
+      
+      // Should be able to undo
+      expect(newManager.undo()).toBe(true);
+      expect(newManager.getCurrentState().matchHistory.length).toBe(0);
     });
 
     it('should respect maxHistorySize for undo stack', () => {

@@ -137,3 +137,13 @@ export class InvalidQueueIndexError extends QueueManagementError {
     this.name = 'InvalidQueueIndexError';
   }
 }
+
+/**
+ * Error thrown when match index is invalid for editing
+ */
+export class InvalidMatchIndexError extends QueueManagementError {
+  constructor(index: number, historyLength: number) {
+    super(`Invalid match index: ${index}. Match history length is ${historyLength}. Valid indices are 0 to ${historyLength - 1}.`);
+    this.name = 'InvalidMatchIndexError';
+  }
+}

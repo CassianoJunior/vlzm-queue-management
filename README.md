@@ -275,12 +275,18 @@ manager.reorderTeamInQueue(1, 2); // Move team3 from position 1 to position 2
 ```
 
 #### `saveState(): string`
+
 Save the current state to a JSON string for persistence.
+
+- **Includes**: Full system state, match counter, and undo/redo history stacks
+- **Use Case**: Persist session to localStorage, file, or database
 
 #### `loadState(savedState: string): void`
 
 Load a previously saved state.
 
+- **Behavior**: Restores full system state including undo/redo history if present in the saved state
+- **Backwards Compatible**: Old saved states without undo/redo stacks will load with empty history
 - **Throws**: `Error` if the saved state is invalid
 
 ### Undo/Redo
@@ -364,7 +370,9 @@ console.log(manager.canRedo()); // false - redo history was cleared
 
 **Important Notes:**
 
-- `initialize()` and `loadState()` clear both undo and redo history
+- `initialize()` clears both undo and redo history (fresh start)
+- `saveState()` now includes undo/redo stacks, so they persist across sessions
+- `loadState()` restores undo/redo history if present in the saved state
 - `updateScore()` is not tracked for undo (live scores are ephemeral)
 - Snapshots exclude `currentScores` to keep history focused on concluded matches and queue state
 

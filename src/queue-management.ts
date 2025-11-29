@@ -6,15 +6,17 @@ import {
   type SystemState,
   type Court,
   type TeamStatistics,
+  type Score,
   InsufficientTeamsError,
   InvalidMatchResultError,
   NoActiveMatchError,
   CourtNotFoundError,
-  InvalidQueueIndexError
+  InvalidQueueIndexError,
+  InvalidMatchIndexError
 } from './types';
 
 // Re-export types for convenience
-export type { Player, Team, Match, MatchResult, SystemState, Court, TeamStatistics };
+export type { Player, Team, Match, MatchResult, SystemState, Court, TeamStatistics, Score };
 
 /**
  * Queue Manager for organizing doubles matches across multiple courts
@@ -625,19 +627,64 @@ export class QueueManager {
   }
 
   /**
-   * Save the current state to a serializable object
+   * Edit the scores of a previously recorded match (cosmetic-only, does not re-run queue logic)
+   * @param matchIndex - The index of the match in the history (0-based)
+   * @param newScores - Array of two Score objects with updated scores
+   * @throws {InvalidMatchIndexError} if matchIndex is out of bounds
+   * @throws {InvalidMatchResultError} if scores are equal or teams don't match
+   */
+  editMatchResult(matchIndex: number, newScores: [Score, Score]): void {
+    // Validate match index
+    if (matchIndex < 0 || matchIndex >= this.state.matchHistory.length) {
+      throw new InvalidMatchIndexError(matchIndex, this.state.matchHistory.length);
+    }
+
+    const result = this.state.matchHistory[matchIndex];
+
+    // Validate that both teams are part of this match
+    const matchTeams = [result.match.team1, result.match.team2];
+    const validTeams = newScores.every(s => 
+      matchTeams.some(t => areTeamsEqual(s.team, t))
+    );
+    
+    if (!validTeams) {
+      throw new InvalidMatchResultError('Teams in new scores must be part of the original match');
+    }
+
+    // Validate scores are not equal
+    if (newScores[0].score === newScores[1].score) {
+      throw new InvalidMatchResultError('Scores cannot be equal');
+    }
+
+    this.saveSnapshot();
+
+    // Sort to determine winner/loser
+    const sortedScores = [...newScores].sort((a, b) => b.score - a.score) as [Score, Score];
+    
+    // Update the result
+    result.scores = sortedScores;
+    result.winner = sortedScores[0].team;
+    result.loser = sortedScores[1].team;
+
+    console.log(`Edited match ${matchIndex + 1}: ${result.winner.player1.name}/${result.winner.player2.name} won ${sortedScores[0].score}-${sortedScores[1].score}`);
+  }
+
+  /**
+   * Save the current state to a serializable object (includes undo/redo stacks for persistence)
    * @returns A serializable representation of the current state
    */
   saveState(): string {
     const saveData = {
       state: this.state,
-      matchCounter: this.matchCounter
+      matchCounter: this.matchCounter,
+      undoStack: this.undoStack,
+      redoStack: this.redoStack
     };
     return JSON.stringify(saveData);
   }
 
   /**
-   * Load a previously saved state
+   * Load a previously saved state (includes undo/redo stacks if available)
    * @param savedState - A JSON string from a previous saveState() call
    * @throws {Error} if the saved state is invalid
    */
@@ -660,9 +707,9 @@ export class QueueManager {
       this.state = saveData.state;
       this.matchCounter = saveData.matchCounter;
 
-      // Clear undo/redo history on loadState
-      this.undoStack = [];
-      this.redoStack = [];
+      // Restore undo/redo stacks if available, otherwise clear them
+      this.undoStack = Array.isArray(saveData.undoStack) ? saveData.undoStack : [];
+      this.redoStack = Array.isArray(saveData.redoStack) ? saveData.redoStack : [];
 
       console.log('State loaded successfully');
       if (this.state.courts.length > 0 && this.state.courts[0].currentMatch) {
@@ -671,6 +718,7 @@ export class QueueManager {
       }
       console.log(`Queue size: ${this.state.queue.length}`);
       console.log(`Match history: ${this.state.matchHistory.length} matches`);
+      console.log(`Undo depth: ${this.undoStack.length}, Redo depth: ${this.redoStack.length}`);
     } catch (error) {
       throw new Error(`Failed to load state: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
