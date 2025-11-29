@@ -274,6 +274,43 @@ manager.reorderTeamInQueue(1, 2); // Move team3 from position 1 to position 2
 // Queue: [team6, team4, team3, team5]
 ```
 
+#### `editMatchResult(matchIndex: number, newScores: [Score, Score]): void`
+
+Edit the scores of a previously recorded match. This is a **cosmetic-only** operation that updates the match history without re-running queue logic.
+
+- **Parameters**:
+  - `matchIndex`: The index of the match in the history (0-based)
+  - `newScores`: Array of two Score objects with updated scores
+- **Behavior**:
+  - Updates the scores in match history
+  - Automatically determines winner/loser based on new scores
+  - Does NOT affect queue order or court state (cosmetic only)
+  - Supports undo/redo
+- **Use Case**: Correcting a typo in recorded scores after the fact
+- **Throws**:
+  - `InvalidMatchIndexError` if matchIndex is out of bounds
+  - `InvalidMatchResultError` if scores are equal or teams don't match the original match
+
+```typescript
+// Example: Correcting a score typo
+const history = manager.getMatchHistory();
+// Match 0: team1 won 15-10 (but we meant to record 15-12)
+
+manager.editMatchResult(0, [
+  { team: team1, score: 15 },
+  { team: team2, score: 12 }
+]);
+
+// Example: Reversing the winner (oops, we got it backwards!)
+manager.editMatchResult(0, [
+  { team: team1, score: 10 },
+  { team: team2, score: 15 }
+]);
+// Now team2 is recorded as the winner
+
+// Note: Queue and court positions are NOT affected - use undo() for that
+```
+
 #### `saveState(): string`
 
 Save the current state to a JSON string for persistence.

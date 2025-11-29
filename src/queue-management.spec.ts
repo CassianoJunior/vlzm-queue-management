@@ -11,7 +11,8 @@ import {
   InvalidMatchResultError,
   NoActiveMatchError,
   CourtNotFoundError,
-  InvalidQueueIndexError
+  InvalidQueueIndexError,
+  InvalidMatchIndexError
 } from './types';
 
 describe('Queue Management System', () => {
@@ -1581,6 +1582,247 @@ describe('Queue Management System', () => {
       
       expect(manager.getUndoDepth()).toBe(3);
       expect(manager.getRedoDepth()).toBe(0);
+    });
+  });
+
+  describe('Edit Match Result', () => {
+    it('should throw InvalidMatchIndexError for negative index', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      
+      manager.initialize([team1, team2, team3]);
+      manager.recordResult(1, { 15: team1, 10: team2 });
+      
+      expect(() => manager.editMatchResult(-1, [
+        { team: team1, score: 20 },
+        { team: team2, score: 18 }
+      ])).toThrow(InvalidMatchIndexError);
+    });
+
+    it('should throw InvalidMatchIndexError for index out of bounds', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      
+      manager.initialize([team1, team2, team3]);
+      manager.recordResult(1, { 15: team1, 10: team2 });
+      
+      expect(() => manager.editMatchResult(5, [
+        { team: team1, score: 20 },
+        { team: team2, score: 18 }
+      ])).toThrow(InvalidMatchIndexError);
+    });
+
+    it('should throw InvalidMatchIndexError when history is empty', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      
+      manager.initialize([team1, team2]);
+      
+      expect(() => manager.editMatchResult(0, [
+        { team: team1, score: 20 },
+        { team: team2, score: 18 }
+      ])).toThrow(InvalidMatchIndexError);
+    });
+
+    it('should throw InvalidMatchResultError when teams do not match original match', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      
+      manager.initialize([team1, team2, team3]);
+      manager.recordResult(1, { 15: team1, 10: team2 });
+      
+      expect(() => manager.editMatchResult(0, [
+        { team: team1, score: 20 },
+        { team: team3, score: 18 } // team3 was not in this match
+      ])).toThrow(InvalidMatchResultError);
+    });
+
+    it('should throw InvalidMatchResultError when scores are equal', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      
+      manager.initialize([team1, team2, team3]);
+      manager.recordResult(1, { 15: team1, 10: team2 });
+      
+      expect(() => manager.editMatchResult(0, [
+        { team: team1, score: 15 },
+        { team: team2, score: 15 } // equal scores not allowed
+      ])).toThrow(InvalidMatchResultError);
+    });
+
+    it('should update scores without changing winner when winner still has higher score', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      
+      manager.initialize([team1, team2, team3]);
+      manager.recordResult(1, { 15: team1, 10: team2 });
+      
+      // Original: team1 won 15-10
+      const historyBefore = manager.getMatchHistory();
+      expect(areTeamsEqual(historyBefore[0].winner, team1)).toBe(true);
+      expect(historyBefore[0].scores![0].score).toBe(15);
+      expect(historyBefore[0].scores![1].score).toBe(10);
+      
+      // Edit to team1 won 21-18
+      manager.editMatchResult(0, [
+        { team: team1, score: 21 },
+        { team: team2, score: 18 }
+      ]);
+      
+      const historyAfter = manager.getMatchHistory();
+      expect(areTeamsEqual(historyAfter[0].winner, team1)).toBe(true);
+      expect(areTeamsEqual(historyAfter[0].loser, team2)).toBe(true);
+      expect(historyAfter[0].scores![0].score).toBe(21);
+      expect(historyAfter[0].scores![1].score).toBe(18);
+    });
+
+    it('should swap winner and loser when new scores reverse the result', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      
+      manager.initialize([team1, team2, team3]);
+      manager.recordResult(1, { 15: team1, 10: team2 });
+      
+      // Original: team1 won
+      expect(areTeamsEqual(manager.getMatchHistory()[0].winner, team1)).toBe(true);
+      
+      // Edit to make team2 the winner
+      manager.editMatchResult(0, [
+        { team: team1, score: 12 },
+        { team: team2, score: 15 }
+      ]);
+      
+      const history = manager.getMatchHistory();
+      expect(areTeamsEqual(history[0].winner, team2)).toBe(true);
+      expect(areTeamsEqual(history[0].loser, team1)).toBe(true);
+      expect(history[0].scores![0].score).toBe(15); // winner score first
+      expect(history[0].scores![1].score).toBe(12);
+    });
+
+    it('should support undo after editing match result', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      
+      manager.initialize([team1, team2, team3]);
+      manager.recordResult(1, { 15: team1, 10: team2 });
+      
+      // Edit the match
+      manager.editMatchResult(0, [
+        { team: team1, score: 21 },
+        { team: team2, score: 18 }
+      ]);
+      
+      expect(manager.getMatchHistory()[0].scores![0].score).toBe(21);
+      
+      // Undo should restore original scores
+      expect(manager.undo()).toBe(true);
+      
+      const history = manager.getMatchHistory();
+      expect(history[0].scores![0].score).toBe(15);
+      expect(history[0].scores![1].score).toBe(10);
+    });
+
+    it('should not affect queue or court state (cosmetic only)', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      
+      manager.initialize([team1, team2, team3]);
+      manager.recordResult(1, { 15: team1, 10: team2 });
+      
+      const stateBefore = manager.getCurrentState();
+      const queueBefore = [...stateBefore.queue];
+      const courtMatchBefore = stateBefore.courts[0].currentMatch;
+      
+      // Reverse the winner
+      manager.editMatchResult(0, [
+        { team: team1, score: 10 },
+        { team: team2, score: 15 }
+      ]);
+      
+      const stateAfter = manager.getCurrentState();
+      
+      // Queue should be unchanged
+      expect(stateAfter.queue.length).toBe(queueBefore.length);
+      for (let i = 0; i < queueBefore.length; i++) {
+        expect(areTeamsEqual(stateAfter.queue[i], queueBefore[i])).toBe(true);
+      }
+      
+      // Court match should be unchanged
+      expect(areTeamsEqual(stateAfter.courts[0].currentMatch!.team1, courtMatchBefore!.team1)).toBe(true);
+      expect(areTeamsEqual(stateAfter.courts[0].currentMatch!.team2, courtMatchBefore!.team2)).toBe(true);
+    });
+
+    it('should update team statistics after editing', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      
+      manager.initialize([team1, team2, team3]);
+      manager.recordResult(1, { 15: team1, 10: team2 });
+      
+      // Original stats
+      let stats = manager.getTeamStatistics();
+      let team1Stats = stats.find(s => areTeamsEqual(s.team, team1))!;
+      expect(team1Stats.wins).toBe(1);
+      expect(team1Stats.totalPoints).toBe(15);
+      
+      // Edit to change scores
+      manager.editMatchResult(0, [
+        { team: team2, score: 21 },
+        { team: team1, score: 18 }
+      ]);
+      
+      // Stats should reflect the edit
+      stats = manager.getTeamStatistics();
+      team1Stats = stats.find(s => areTeamsEqual(s.team, team1))!;
+      const team2Stats = stats.find(s => areTeamsEqual(s.team, team2))!;
+      
+      expect(team1Stats.wins).toBe(0);
+      expect(team1Stats.losses).toBe(1);
+      expect(team1Stats.totalPoints).toBe(18);
+      
+      expect(team2Stats.wins).toBe(1);
+      expect(team2Stats.losses).toBe(0);
+      expect(team2Stats.totalPoints).toBe(21);
+    });
+
+    it('should work with team order reversed in newScores', () => {
+      const manager = new QueueManager(1);
+      const team1 = createTeam(createPlayer(1, 'Alice'), createPlayer(2, 'Bob'));
+      const team2 = createTeam(createPlayer(3, 'Charlie'), createPlayer(4, 'Diana'));
+      const team3 = createTeam(createPlayer(5, 'Eve'), createPlayer(6, 'Frank'));
+      
+      manager.initialize([team1, team2, team3]);
+      manager.recordResult(1, { 15: team1, 10: team2 });
+      
+      // Provide scores with team2 first
+      manager.editMatchResult(0, [
+        { team: team2, score: 18 },
+        { team: team1, score: 21 }
+      ]);
+      
+      const history = manager.getMatchHistory();
+      expect(areTeamsEqual(history[0].winner, team1)).toBe(true); // team1 still wins (21 > 18)
+      expect(history[0].scores![0].score).toBe(21); // winner score first
+      expect(history[0].scores![1].score).toBe(18);
     });
   });
 });
